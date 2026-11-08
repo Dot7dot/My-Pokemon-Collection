@@ -1,6 +1,6 @@
 // 備份：把所有收藏（文字＋照片）打包成一個 .zip；匯入時讀回來。
 // 照片本來就是 JPEG，不必壓縮，所以用最簡單的「只儲存」格式，不需要外部函式庫。
-import { allItems, getBlobs, saveItem } from './db.js';
+import { allItems, getImages, saveItem } from './db.js';
 
 const CRC_TABLE = (() => {
   const t = new Uint32Array(256);
@@ -30,9 +30,12 @@ export async function exportZip(onProgress) {
   const files = [{ name: 'collection.json', data: enc.encode(JSON.stringify({ app: 'my-pokemon-collection', version: 1, exported: new Date().toISOString(), items }, null, 1)) }];
   let i = 0;
   for (const it of items) {
-    const b = await getBlobs(it.id);
-    if (b?.full) files.push({ name: `photos/${it.id}.jpg`, data: new Uint8Array(await b.full.arrayBuffer()) });
-    if (b?.thumb) files.push({ name: `thumbs/${it.id}.jpg`, data: new Uint8Array(await b.thumb.arrayBuffer()) });
+    const b = await getImages(it.id);
+    const bytes = async (x) => new Uint8Array(x instanceof Blob ? await x.arrayBuffer() : x);
+    try {
+      if (b?.full) files.push({ name: `photos/${it.id}.jpg`, data: await bytes(b.full) });
+      if (b?.thumb) files.push({ name: `thumbs/${it.id}.jpg`, data: await bytes(b.thumb) });
+    } catch { /* 讀不到的照片就略過，其他照常備份 */ }
     onProgress?.(++i, items.length);
   }
   const parts = [], central = [];
@@ -90,7 +93,8 @@ export async function importZip(file) {
     const full = files.get(`photos/${it.id}.jpg`);
     if (!full) continue;
     const thumb = files.get(`thumbs/${it.id}.jpg`) || full;
-    await saveItem(it, { full: new Blob([full], { type: 'image/jpeg' }), thumb: new Blob([thumb], { type: 'image/jpeg' }) });
+    delete it.broken;
+    await saveItem(it, { full, thumb, type: 'image/jpeg' }); // 直接存位元組（saveItem 會複製一份 ArrayBuffer）
     added++;
   }
   return added;

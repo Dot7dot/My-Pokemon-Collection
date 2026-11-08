@@ -1,7 +1,7 @@
 import { DEX } from './dex.js';
 import { FORMS } from './forms.js';
 import { $, $$, esc, pad, layer, toast, confirmBox, pickFile, closeTopLayer } from './ui.js';
-import { allItems, itemsFor, saveItem, deleteItem, imageURL, forgetURLs, uid, askPersist } from './db.js';
+import { allItems, itemsFor, saveItem, deleteItem, imageURL, imageBlob, forgetURLs, releaseURLs, migrateBlobs, uid, askPersist } from './db.js';
 import { processPhoto, processCard } from './image.js';
 import { captureCard } from './capture.js';
 import { cardHTML, cardShell, interactive, ensureMotion, FINISHES } from './card3d.js';
@@ -207,6 +207,7 @@ async function openDetail(id, { replace = false } = {}) {
   if (location.hash !== target) {
     if (replace) history.replaceState(history.state, '', target); else location.hash = target;
   }
+  if (currentDex && currentDex !== id) releaseURLs();
   currentDex = id;
   currentForm = 0;
   shinyOn = false;
@@ -282,7 +283,7 @@ function closeDetail() {
   if (d.hidden) return;
   d.classList.remove('in');
   currentDex = 0;
-  setTimeout(() => { if (!currentDex) { d.hidden = true; d.innerHTML = ''; } }, 230);
+  setTimeout(() => { if (!currentDex) { d.hidden = true; d.innerHTML = ''; releaseURLs(); } }, 230);
   document.body.classList.remove('locked');
   window.scrollTo(0, gridScroll);
 }
@@ -314,6 +315,7 @@ async function renderItems() {
     if (dex !== currentDex) return;
     const note = (it) => (it.note ? `<span class="item-note">${esc(it.note)}</span>` : '');
     box.innerHTML = list.map((it, i) => {
+      if (it.broken || !urls[i]) return `<button class="item broken-item" data-broken="${it.id}"><span>⚠️</span>照片無法讀取<small>${esc(it.title || it.note || '')}</small><small>點一下刪除，再重新上傳</small></button>`;
       if (MADE_CATS.has(k)) return `<button class="item card-item" data-item="${it.id}" aria-label="看收藏卡">${cardShell(madeFront(it, urls[i]), it.finish || DEFAULT_FINISH[k])}</button>`;
       if (k === 'card') return `<button class="item card-item" data-item="${it.id}" aria-label="看卡片">${cardHTML(urls[i], it.finish)}${note(it)}</button>`;
       return `<button class="item photo-item" data-item="${it.id}" aria-label="看照片"><img src="${urls[i]}" alt="" loading="lazy">${note(it)}</button>`;
@@ -516,13 +518,17 @@ function itemMenu(it, viewer) {
     el.close();
     if (act === 'edit') { viewer.close(); MADE_CATS.has(it.cat) ? madeFlow(it.cat, it) : editSheet({ dex: it.dex, cat: it.cat, item: it }); }
     if (act === 'save') {
-      const a = document.createElement('a');
-      const photo = await imageURL(it.id, 'full');
-      // 自製卡存成整張卡片的圖
-      const info = cardInfo(it.dex, it.form);
-      a.href = MADE_CATS.has(it.cat) ? URL.createObjectURL(await renderMadeCard({ ...it, info, title: it.title ?? info.title }, photo)) : photo;
-      a.download = `${pad(it.dex)}-${mon(it.dex).zh}-${CATS[it.cat].label}.jpg`;
-      a.click();
+      const name = `${pad(it.dex)}-${mon(it.dex).zh}-${CATS[it.cat].label}.jpg`;
+      let blob = null;
+      try {
+        if (MADE_CATS.has(it.cat)) {
+          // 自製卡存成整張卡片的圖
+          const info = cardInfo(it.dex, it.form);
+          blob = await renderMadeCard({ ...it, info, title: it.title ?? info.title }, await imageURL(it.id, 'full'));
+        } else blob = await imageBlob(it.id, 'full');
+      } catch (err) { console.error(err); }
+      if (!blob) { toast('這張照片讀不到了'); return; }
+      saveFile(blob, name);
     }
     if (act === 'del' && await confirmBox('確定要刪除這件收藏嗎？刪除後無法復原。', '刪除', true)) {
       await deleteItem(it.id);
@@ -534,6 +540,47 @@ function itemMenu(it, viewer) {
       renderItems();
     }
   });
+}
+
+// 讀不到照片的收藏：確認後刪掉，讓使用者重新上傳
+async function removeBroken(id) {
+  const it = detailItems.find((x) => x.id === id);
+  if (!it || !(await confirmBox('這件收藏的照片已經讀不到了（可能是瀏覽器清掉了資料）。要刪除它再重新上傳嗎？', '刪除', true))) return;
+  await deleteItem(id);
+  forgetURLs(id);
+  bump(it.dex, it.cat, -1);
+  refreshTile(it.dex);
+  renderItems();
+}
+
+// 存檔：手機用分享選單（iPhone 可以直接「儲存影像」），電腦用下載。
+// iOS Safari 不能用新分頁或 blob: 下載連結開圖片，所以分享不行時改在頁面內顯示圖片讓使用者長按儲存。
+const isMobile = () => /Mobi|Android|iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+async function saveFile(blob, name) {
+  const type = blob.type || 'application/octet-stream';
+  const file = new File([blob], name, { type });
+  if (isMobile() && navigator.canShare?.({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: name }); return; } catch (err) {
+      if (err?.name === 'AbortError') return; // 使用者自己取消
+    }
+  }
+  if (isIOS() && type.startsWith('image/')) { showSaveImage(blob); return; }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 15000);
+}
+function showSaveImage(blob) {
+  const url = URL.createObjectURL(blob);
+  const el = layer(`<div class="viewer" role="dialog" aria-modal="true">
+    <div class="v-top"><button class="btn round dark" data-close aria-label="關閉">✕</button><span class="v-count">長按圖片 →「加入照片」</span><span class="round-spacer"></span></div>
+    <div class="v-stage"><img class="v-img save-img" src="${url}" alt=""></div>
+  </div>`, { cls: 'full dark-layer', onClose: () => URL.revokeObjectURL(url) });
+  return el;
 }
 
 // ───────── 風格 ─────────
@@ -586,6 +633,7 @@ async function openMenu() {
   const el = layer(`<div class="sheet" role="dialog" aria-modal="true">
     <h3 class="sheet-title">收藏庫</h3>
     <p class="sheet-hint">收藏的照片只存在這台裝置的瀏覽器裡${usage ? `（${usage}）` : ''}。換手機或清除瀏覽器資料前，記得先匯出備份。</p>
+    ${isIOS() && !navigator.standalone ? '<p class="sheet-hint ios-tip">📱 iPhone 提醒：Safari 超過 7 天沒打開這個網站，可能會自動清掉收藏。建議按分享鍵 →「加入主畫面」，從主畫面打開使用，並定期匯出備份。</p>' : ''}
     <button class="menu-row" data-act="export">📦 匯出備份（.zip）</button>
     <button class="menu-row" data-act="import">📥 匯入備份</button>
     <button class="menu-row" data-act="random">🎲 隨機看一隻寶可夢</button>
@@ -603,16 +651,7 @@ async function openMenu() {
         const { blob, count } = await exportZip();
         if (!count) { toast('還沒有收藏可以備份'); return; }
         const name = `my-pokemon-collection-${new Date().toISOString().slice(0, 10)}.zip`;
-        const file = new File([blob], name, { type: 'application/zip' });
-        if (navigator.canShare?.({ files: [file] }) && /Mobi|Android|iPhone|iPad/.test(navigator.userAgent)) {
-          await navigator.share({ files: [file], title: name }).catch(() => {});
-        } else {
-          const a = document.createElement('a');
-          a.href = URL.createObjectURL(blob);
-          a.download = name;
-          a.click();
-          setTimeout(() => URL.revokeObjectURL(a.href), 10000);
-        }
+        await saveFile(blob, name);
         toast(`已匯出 ${count} 件收藏`);
       } catch (err) { console.error(err); toast('匯出失敗'); }
     }
@@ -700,6 +739,8 @@ function bind() {
     if (jump) { e.preventDefault(); $(`#sec-${jump.dataset.jump}`).scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
     const add = e.target.closest('[data-add]');
     if (add) { chooseSource(add.dataset.add); return; }
+    const br = e.target.closest('[data-broken]');
+    if (br) { removeBroken(br.dataset.broken); return; }
     const it = e.target.closest('[data-item]');
     if (it) viewItem(it.dataset.item);
   });
@@ -733,6 +774,11 @@ function bind() {
 async function init() {
   if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
   applyStyle(document.documentElement.dataset.style || 'default');
+  try {
+    // 舊版存的照片（Blob）轉成 ArrayBuffer；讀不到的會標記起來
+    const m = await migrateBlobs();
+    if (m.broken) toast(`有 ${m.broken} 件收藏的照片讀不到了，請打開該寶可夢重新上傳`, 5000);
+  } catch (err) { console.error(err); }
   try { await loadCounts(); } catch (err) { console.error(err); toast('無法開啟收藏資料庫（無痕模式可能不支援）'); }
   renderGrid();
   bind();
