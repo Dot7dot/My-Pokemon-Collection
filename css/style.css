@@ -631,3 +631,26 @@ textarea.mc-desc:focus { outline-color: var(--accent); outline-style: solid; }
 .form-btn { min-height: 34px; padding: 0 13px; border-radius: 999px; background: var(--surface); box-shadow: inset 0 0 0 1.5px var(--line); font-size: .88rem; font-weight: 600; }
 .form-btn.on { background: var(--yellow); color: var(--yellow-ink); box-shadow: 0 2px 6px rgba(200, 150, 0, .3); }
 .form-btn:active { transform: scale(.96); }
+
+/* ───────── 自動對齊、調整四角 ───────── */
+.align-msg { margin: 0; text-align: center; font-size: .85rem; text-shadow: 0 1px 3px #000; }
+.align-row { display: flex; justify-content: center; gap: 8px; }
+.align-row .chip-btn:disabled { opacity: .4; }
+.corners { position: absolute; inset: 0; background: #0b0a0f; touch-action: none; }
+.corners-stage { position: absolute; inset: 0; }
+.corners-img { position: absolute; }
+.corners-canvas { display: block; }
+.corners-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.corners-poly { fill: rgba(255, 216, 74, .14); stroke: #ffd84a; stroke-width: 2.5; stroke-linejoin: round; }
+.corner-dot {
+  position: absolute;
+  width: 44px; height: 44px;
+  margin: -22px 0 0 -22px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #ffd84a 0 7px, rgba(255, 216, 74, .25) 8px 100%);
+  box-shadow: 0 0 0 2px #ffd84a, 0 2px 8px rgba(0, 0, 0, .5);
+  touch-action: none;
+  cursor: grab;
+}
+.corners-loupe { position: absolute; top: calc(var(--safe-top) + 76px); width: 120px; height: 120px; border-radius: 50%; overflow: hidden; box-shadow: 0 0 0 3px #ffd84a, 0 6px 18px rgba(0, 0, 0, .5); pointer-events: none; }
+.corners-loupe canvas { display: block; }
