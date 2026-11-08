@@ -4,7 +4,7 @@ import { $, $$, esc, pad, layer, toast, confirmBox, pickFile, closeTopLayer } fr
 import { allItems, itemsFor, saveItem, deleteItem, imageURL, forgetURLs, uid, askPersist } from './db.js';
 import { processPhoto, processCard } from './image.js';
 import { captureCard } from './capture.js';
-import { cardHTML, cardShell, interactive, FINISHES } from './card3d.js';
+import { cardHTML, cardShell, interactive, ensureMotion, FINISHES } from './card3d.js';
 import { MADE_CATS, DEFAULT_FINISH, madeCardFace, openMadeEditor, renderMadeCard } from './madecard.js';
 import { exportZip, importZip } from './backup.js';
 
@@ -405,6 +405,9 @@ function viewItem(id) {
   const list = detailItems.filter((it) => it.cat === item.cat);
   let idx = list.indexOf(item);
   let api = null;
+  // 一點開卡片就啟動陀螺儀；iPhone 第一次會跳出權限詢問（必須在這次點擊當下要求）
+  if (cardLike(item.cat)) ensureMotion();
+  const hint = matchMedia('(pointer: coarse)').matches ? '晃動手機或按住卡片拖曳看反光 · 點兩下翻面' : '按住卡片拖曳看反光 · 點兩下翻面';
   const el = layer(`<div class="viewer ${cardLike(item.cat) ? 'v-card' : 'v-photo'}" role="dialog" aria-modal="true">
     <div class="v-top">
       <button class="btn round dark" data-close aria-label="關閉">✕</button>
@@ -414,7 +417,6 @@ function viewItem(id) {
     <div class="v-stage"></div>
     <div class="v-tools" ${cardLike(item.cat) ? '' : 'hidden'}>
       <button class="btn chip-btn" data-flip>🔄 翻面</button>
-      <button class="btn chip-btn" data-gyro>📱 晃手機看反光</button>
     </div>
     <p class="v-note"></p>
     <button class="v-nav prev" data-step="-1" aria-label="上一張">‹</button>
@@ -434,9 +436,8 @@ function viewItem(id) {
     if (cardLike(it.cat)) {
       const shell = made ? cardShell(madeFront(it, src), it.finish || DEFAULT_FINISH[it.cat], { big: true }) : cardHTML(src, it.finish, { big: true });
       stage.innerHTML = `<div class="v-card-holder">${shell}</div>
-        <p class="v-hint">按住卡片拖曳看反光 · 點兩下翻面</p>`;
-      api = interactive($('.v-card-holder', stage));
-      $('[data-gyro]', el).classList.remove('on');
+        <p class="v-hint">${hint}</p>`;
+      api = interactive($('.v-card-holder', stage), { motion: true });
     } else {
       stage.innerHTML = `<img class="v-img" src="${src}" alt="">`;
     }
@@ -446,12 +447,6 @@ function viewItem(id) {
     const step = e.target.closest('[data-step]');
     if (step) { idx = (idx + +step.dataset.step + list.length) % list.length; show(); return; }
     if (e.target.closest('[data-flip]')) api?.flip();
-    const g = e.target.closest('[data-gyro]');
-    if (g && api) {
-      const on = await api.gyro();
-      if (on === null) toast('這台裝置不支援陀螺儀，或沒有允許權限');
-      g.classList.toggle('on', !!on);
-    }
     if (e.target.closest('[data-menu]')) itemMenu(list[idx], el);
   });
   // 照片左右滑動切換
