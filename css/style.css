@@ -675,3 +675,21 @@ textarea.mc-desc:focus { outline-color: var(--accent); outline-style: solid; }
 .fchip[aria-pressed="true"] { background: var(--cc, var(--navy)); color: #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, .18); }
 .fchip[data-filter="mine"][aria-pressed="true"] { background: var(--navy); color: var(--yellow); }
 .cat-tab { font-size: .78rem; }
+
+/* ───────── 讀不到的照片 ───────── */
+.broken-item {
+  min-height: 140px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 2px dashed #d93a32;
+  background: color-mix(in srgb, #d93a32 6%, var(--surface));
+  color: #b3261e;
+  font-weight: 700;
+  text-align: center;
+}
+.cardlike .broken-item { aspect-ratio: 63 / 88; min-height: 0; }
+.broken-item span { font-size: 1.8rem; }
+.broken-item small { font-weight: 400; color: var(--ink2); font-size: .74rem; }
+.save-img { -webkit-touch-callout: default; user-select: auto; -webkit-user-select: auto; }
+.ios-tip { background: color-mix(in srgb, var(--yellow) 30%, var(--surface)); padding: 8px 10px; border-radius: 10px; color: var(--ink); }
