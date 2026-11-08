@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>My Pokémon Collection</title>
+  <meta name="description" content="我的寶可夢收藏庫：模型、卡片、色違、畫圖，一隻一隻收進圖鑑。">
+  <meta name="theme-color" content="#e8473f" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#16141c" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="我的寶可夢">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="top-row">
+      <div class="brand">
+        <span class="brand-ball" aria-hidden="true"></span>
+        <div>
+          <h1>My Pokémon Collection</h1>
+          <p class="brand-sub" id="progress">我的寶可夢收藏庫</p>
+        </div>
+      </div>
+      <button class="icon-btn" id="menuBtn" aria-label="選單">⋯</button>
+    </div>
+    <div class="search">
+      <span class="search-ico" aria-hidden="true">⌕</span>
+      <input id="q" type="search" inputmode="search" autocomplete="off" enterkeyhint="go"
+             placeholder="搜尋編號或名稱：25、皮卡丘、Pikachu、ピカチュウ">
+      <button class="search-clear" id="qClear" aria-label="清除搜尋" hidden>✕</button>
+    </div>
+    <nav class="chips" id="genNav" aria-label="世代"></nav>
+  </header>
+
+  <main id="grid" class="grid-wrap"></main>
+  <p class="no-result" id="noResult" hidden></p>
+  <footer class="foot">
+    寶可夢名稱與圖片資料來自 <a href="https://pokeapi.co/" target="_blank" rel="noopener">PokéAPI</a>。
+    你的收藏照片只存在這台裝置的瀏覽器裡，記得用右上角 ⋯ 定期備份。
+  </footer>
+
+  <section id="detail" class="detail" hidden aria-live="polite"></section>
+  <div id="layers"></div>
+  <div id="toasts" aria-live="polite"></div>
+
+  <input type="file" id="fileCam" accept="image/*" capture="environment" hidden>
+  <input type="file" id="filePick" accept="image/*" hidden>
+  <input type="file" id="fileZip" accept=".zip,application/zip" hidden>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
