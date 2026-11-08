@@ -3,7 +3,8 @@ import { $, $$, esc, pad, layer, toast, confirmBox, pickFile, closeTopLayer } fr
 import { allItems, itemsFor, saveItem, deleteItem, imageURL, forgetURLs, uid, askPersist } from './db.js';
 import { processPhoto, processCard } from './image.js';
 import { captureCard } from './capture.js';
-import { cardHTML, interactive, FINISHES } from './card3d.js';
+import { cardHTML, cardShell, interactive, FINISHES } from './card3d.js';
+import { MADE_CATS, DEFAULT_FINISH, madeCardFace, openMadeEditor, renderMadeCard } from './madecard.js';
 import { exportZip, importZip } from './backup.js';
 
 // ───────── 基本資料 ─────────
@@ -21,9 +22,9 @@ const GENS = [
 ];
 const GEN_ZH = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九'];
 export const CATS = {
-  figure: { label: '模型', icon: '🧸', hint: '公仔、絨毛娃娃、扭蛋、模型' },
+  figure: { label: '模型', icon: '🧸', hint: '拍下公仔、娃娃、扭蛋，做成收藏卡' },
   card: { label: '卡片', icon: '🃏', hint: '用 PTCG 標準尺寸拍下來，變成立體卡片' },
-  shiny: { label: '色違', icon: '✨', hint: '遊戲裡抓到的色違截圖或照片' },
+  shiny: { label: '色違', icon: '✨', hint: '色違的截圖或照片，做成收藏卡' },
   art: { label: '畫圖', icon: '🎨', hint: '自己畫的或收到的圖' },
 };
 const CAT_KEYS = Object.keys(CATS);
@@ -42,6 +43,15 @@ const mon = (id) => {
   const [zh, en, ja, hans, genus, types, gen] = DEX[id - 1];
   return { id, zh, en, ja, hans, genus, types, gen };
 };
+
+// 自製收藏卡用的資料：名稱、屬性文字、外框顏色
+const cardInfo = (id) => {
+  const m = mon(id);
+  const t1 = TYPES[m.types[0]]?.[1] || '#888', t2 = TYPES[m.types[1] || m.types[0]]?.[1] || t1;
+  return { id, zh: m.zh, typeText: m.types.map((t) => TYPES[t][0]).join('／'), t1, t2 };
+};
+const cardLike = (cat) => cat === 'card' || MADE_CATS.has(cat);
+const madeFront = (it, photo) => madeCardFace({ cat: it.cat, info: cardInfo(it.dex), title: it.title, note: it.note, photo, created: it.created });
 
 // ───────── 收藏統計 ─────────
 const counts = new Map(); // dex → { figure, card, shiny, art }
@@ -181,7 +191,7 @@ async function openDetail(id, { replace = false } = {}) {
         </div>
       </div>
       <div class="cat-tabs" role="tablist">${CAT_KEYS.map((k) => `<a class="cat-tab c-${k}" href="#sec-${k}" data-jump="${k}">${CATS[k].icon} ${CATS[k].label}<b data-count="${k}">0</b></a>`).join('')}</div>
-      <div class="sections">${CAT_KEYS.map((k) => `<section class="cat c-${k}" id="sec-${k}">
+      <div class="sections">${CAT_KEYS.map((k) => `<section class="cat c-${k}${cardLike(k) ? ' cardlike' : ''}" id="sec-${k}">
         <header class="cat-head">
           <h3>${CATS[k].icon} ${CATS[k].label}</h3>
           ${k === 'shiny' ? `<img class="shiny-ref" src="${shinySprite(id)}" alt="色違參考圖" loading="lazy">` : ''}
@@ -219,14 +229,14 @@ async function renderItems() {
     $(`[data-count="${k}"]`).textContent = list.length;
     const box = $(`[data-items="${k}"]`);
     const add = `<button class="add-tile" data-add="${k}"><span>＋</span>${list.length ? '再新增' : `新增${CATS[k].label}`}<small>${CATS[k].hint}</small></button>`;
-    box.innerHTML = list.map((it) => k === 'card'
-      ? `<button class="item card-item" data-item="${it.id}" aria-label="看卡片">${cardHTML('', it.finish)}${it.note ? `<span class="item-note">${esc(it.note)}</span>` : ''}</button>`
-      : `<button class="item photo-item" data-item="${it.id}" aria-label="看照片"><img alt="" loading="lazy">${it.note ? `<span class="item-note">${esc(it.note)}</span>` : ''}</button>`).join('') + add;
-    for (const it of list) {
-      const url = await imageURL(it.id, 'thumb');
-      const img = box.querySelector(`[data-item="${it.id}"] img`);
-      if (img) img.src = url;
-    }
+    const urls = await Promise.all(list.map((it) => imageURL(it.id, 'thumb')));
+    if (dex !== currentDex) return;
+    const note = (it) => (it.note ? `<span class="item-note">${esc(it.note)}</span>` : '');
+    box.innerHTML = list.map((it, i) => {
+      if (MADE_CATS.has(k)) return `<button class="item card-item" data-item="${it.id}" aria-label="看收藏卡">${cardShell(madeFront(it, urls[i]), it.finish || DEFAULT_FINISH[k])}</button>`;
+      if (k === 'card') return `<button class="item card-item" data-item="${it.id}" aria-label="看卡片">${cardHTML(urls[i], it.finish)}${note(it)}</button>`;
+      return `<button class="item photo-item" data-item="${it.id}" aria-label="看照片"><img src="${urls[i]}" alt="" loading="lazy">${note(it)}</button>`;
+    }).join('') + add;
   }
 }
 
@@ -252,7 +262,32 @@ async function addFlow(cat, source) {
   editSheet({ dex, cat, data });
 }
 
+// 模型、色違：直接打開一張可以編輯的卡片
+async function madeFlow(cat, item) {
+  const dex = item?.dex ?? currentDex;
+  const photoURL = item ? await imageURL(item.id, 'full') : null;
+  const r = await openMadeEditor({ cat, info: cardInfo(dex), item, photoURL });
+  if (!r) return;
+  const now = Date.now();
+  const next = item
+    ? { ...item, title: r.title, note: r.note, finish: r.finish, updated: now }
+    : { id: uid(), dex, cat, title: r.title, note: r.note, finish: r.finish, created: now, updated: now, w: 1200, h: 900 };
+  if (!item && !r.blobs) return;
+  try {
+    await saveItem(next, r.blobs);
+  } catch (err) {
+    console.error(err);
+    toast(err?.name === 'QuotaExceededError' ? '儲存空間不足，先備份並刪掉一些照片' : '儲存失敗');
+    return;
+  }
+  if (item && r.blobs) forgetURLs(item.id);
+  if (!item) { bump(dex, cat, 1); refreshTile(dex); askPersist(); }
+  toast(item ? '已儲存' : `已加入 ${mon(dex).zh} 的${CATS[cat].label}收藏`);
+  if (currentDex === dex) renderItems();
+}
+
 function chooseSource(cat) {
+  if (MADE_CATS.has(cat)) { madeFlow(cat); return; }
   const el = layer(`<div class="sheet" role="dialog" aria-modal="true">
     <h3 class="sheet-title">${CATS[cat].icon} 新增${CATS[cat].label}</h3>
     <p class="sheet-hint">${CATS[cat].hint}</p>
@@ -328,14 +363,14 @@ function viewItem(id) {
   const list = detailItems.filter((it) => it.cat === item.cat);
   let idx = list.indexOf(item);
   let api = null;
-  const el = layer(`<div class="viewer ${item.cat === 'card' ? 'v-card' : 'v-photo'}" role="dialog" aria-modal="true">
+  const el = layer(`<div class="viewer ${cardLike(item.cat) ? 'v-card' : 'v-photo'}" role="dialog" aria-modal="true">
     <div class="v-top">
       <button class="btn round dark" data-close aria-label="關閉">✕</button>
       <span class="v-count"></span>
       <button class="btn round dark" data-menu aria-label="更多">⋯</button>
     </div>
     <div class="v-stage"></div>
-    <div class="v-tools" ${item.cat === 'card' ? '' : 'hidden'}>
+    <div class="v-tools" ${cardLike(item.cat) ? '' : 'hidden'}>
       <button class="btn chip-btn" data-flip>🔄 翻面</button>
       <button class="btn chip-btn" data-gyro>📱 晃手機看反光</button>
     </div>
@@ -348,12 +383,15 @@ function viewItem(id) {
     const it = list[idx];
     api?.destroy(); api = null;
     $('.v-count', el).textContent = `${CATS[it.cat].icon} ${CATS[it.cat].label} ${idx + 1} / ${list.length}`;
+    // 自製卡的介紹已經印在卡上，太長放不下時才在下面完整顯示
+    const made = MADE_CATS.has(it.cat);
     $('.v-note', el).textContent = it.note || '';
-    $('.v-note', el).hidden = !it.note;
+    $('.v-note', el).hidden = !it.note || (made && [...it.note].length <= 110);
     $$('.v-nav', el).forEach((b) => { b.hidden = list.length < 2; });
     const src = await imageURL(it.id, 'full');
-    if (it.cat === 'card') {
-      stage.innerHTML = `<div class="v-card-holder">${cardHTML(src, it.finish, { big: true })}</div>
+    if (cardLike(it.cat)) {
+      const shell = made ? cardShell(madeFront(it, src), it.finish || DEFAULT_FINISH[it.cat], { big: true }) : cardHTML(src, it.finish, { big: true });
+      stage.innerHTML = `<div class="v-card-holder">${shell}</div>
         <p class="v-hint">按住卡片拖曳看反光 · 點兩下翻面</p>`;
       api = interactive($('.v-card-holder', stage));
       $('[data-gyro]', el).classList.remove('on');
@@ -376,7 +414,7 @@ function viewItem(id) {
   });
   // 照片左右滑動切換
   let sx = null;
-  stage.addEventListener('touchstart', (e) => { if (item.cat !== 'card') sx = e.touches[0].clientX; }, { passive: true });
+  stage.addEventListener('touchstart', (e) => { if (!cardLike(item.cat)) sx = e.touches[0].clientX; }, { passive: true });
   stage.addEventListener('touchend', (e) => {
     if (sx == null || list.length < 2) return;
     const dx = e.changedTouches[0].clientX - sx;
@@ -387,7 +425,7 @@ function viewItem(id) {
 
 function itemMenu(it, viewer) {
   const el = layer(`<div class="sheet small" role="dialog" aria-modal="true">
-    <button class="menu-row" data-act="edit">✏️ 編輯介紹${it.cat === 'card' ? '／卡面效果' : ''}</button>
+    <button class="menu-row" data-act="edit">✏️ ${MADE_CATS.has(it.cat) ? '編輯卡片（名稱、照片、介紹、卡面效果）' : `編輯介紹${it.cat === 'card' ? '／卡面效果' : ''}`}</button>
     <button class="menu-row" data-act="save">💾 存到手機</button>
     <button class="menu-row danger" data-act="del">🗑️ 刪除這件收藏</button>
     <button class="btn ghost wide" data-close>取消</button>
@@ -397,10 +435,12 @@ function itemMenu(it, viewer) {
     const act = e.target.closest('[data-act]')?.dataset.act;
     if (!act) return;
     el.close();
-    if (act === 'edit') { viewer.close(); editSheet({ dex: it.dex, cat: it.cat, item: it }); }
+    if (act === 'edit') { viewer.close(); MADE_CATS.has(it.cat) ? madeFlow(it.cat, it) : editSheet({ dex: it.dex, cat: it.cat, item: it }); }
     if (act === 'save') {
       const a = document.createElement('a');
-      a.href = await imageURL(it.id, 'full');
+      const photo = await imageURL(it.id, 'full');
+      // 自製卡存成整張卡片的圖
+      a.href = MADE_CATS.has(it.cat) ? URL.createObjectURL(await renderMadeCard({ ...it, info: cardInfo(it.dex), title: it.title ?? mon(it.dex).zh }, photo)) : photo;
       a.download = `${pad(it.dex)}-${mon(it.dex).zh}-${CATS[it.cat].label}.jpg`;
       a.click();
     }
