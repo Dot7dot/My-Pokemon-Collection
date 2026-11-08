@@ -1,7 +1,7 @@
-// 卡片拍照：PTCG 標準尺寸（63 × 88 mm）取景框 → 自動對齊（偵測四邊、拉正）→ 微調裁切 → 輸出 63:88 的卡片圖
+// 卡片拍照：PTCG 標準尺寸（63 × 88 mm）取景框 → 微調裁切（可手動調整四角拉正）→ 輸出 63:88 的卡片圖
 import { layer, $, clamp, toast, pickFile } from './ui.js';
 import { CARD_W, CARD_H, CARD_RATIO, loadBitmap, sizeOf, makeCanvas } from './image.js';
-import { detectCard, warpCard, defaultQuad } from './align.js';
+import { warpCard, defaultQuad } from './align.js';
 
 // 回傳 canvas（900 × 1257）或 null
 export async function captureCard({ source = 'camera' } = {}) {
@@ -114,8 +114,7 @@ function openCamera() {
   });
 }
 
-// 裁切：先自動偵測卡片四邊並拉正（自動對齊），再讓使用者拖曳、縮放、旋轉、微調角度；
-// 偵測不準時可以關掉自動對齊，或用「調整四角」自己拉四個角
+// 裁切：拖曳、縮放、旋轉、微調角度；斜拍的卡片可以用「調整四角」自己拉四個角，把卡片拉正
 function cropper(img, rect) {
   return new Promise((resolve) => {
     let out = null;
@@ -127,10 +126,9 @@ function cropper(img, rect) {
         <button class="btn round dark" data-rot aria-label="旋轉 90 度">⟳</button>
       </div>
       <div class="crop-bottom">
-        <p class="align-msg">🔍 正在找卡片的邊…</p>
         <div class="align-row">
-          <button class="btn chip-btn" data-auto disabled>✨ 自動對齊</button>
           <button class="btn chip-btn" data-corners>⬚ 調整四角</button>
+          <button class="btn chip-btn" data-orig hidden>↩ 原始照片</button>
         </div>
         <label class="tilt-row">角度微調 <input type="range" min="-12" max="12" step="0.1" value="0" data-fine></label>
         <div class="row-btns">
@@ -141,7 +139,7 @@ function cropper(img, rect) {
     </div>`, { cls: 'full', onClose: () => resolve(out) });
 
     const stage = $('.crop-stage', el), frameEl = $('.crop-frame', el), holder = $('.crop-img', el);
-    const msg = $('.align-msg', el), autoBtn = $('[data-auto]', el);
+    const origBtn = $('[data-orig]', el);
     const toCanvas = (src) => {
       if (src instanceof HTMLCanvasElement) return src;
       const { w, h } = sizeOf(src);
@@ -150,7 +148,6 @@ function cropper(img, rect) {
       return c;
     };
     const orig = { canvas: toCanvas(img), rect };   // 原始照片（和相機取景框的位置）
-    let aligned = null;                             // 自動對齊後的 { canvas, rect }
     let quad = null;                                // 目前用來拉正的四個角
     let view = null, iw = 1, ih = 1, curRect = null;
 
@@ -192,37 +189,16 @@ function cropper(img, rect) {
       iw = canvas.width; ih = canvas.height; curRect = r || null;
       layout(true);
     };
-    const useAligned = (on) => {
-      if (on && aligned) setSource(aligned.canvas, aligned.rect); else setSource(orig.canvas, orig.rect);
-      autoBtn.classList.toggle('on', !!(on && aligned));
-      autoBtn.setAttribute('aria-pressed', !!(on && aligned));
-    };
+    // 依照手動拉好的四個角拉正
     const applyQuad = (q) => {
       quad = q;
-      aligned = warpCard(orig.canvas, q);
-      autoBtn.disabled = false;
-      useAligned(true);
+      const w = warpCard(orig.canvas, q);
+      setSource(w.canvas, w.rect);
+      origBtn.hidden = false;
     };
     setSource(orig.canvas, orig.rect);
     const ro = new ResizeObserver(() => layout(false));
     ro.observe(stage);
-
-    // 第一步：自動偵測（讓畫面先出來再算）
-    setTimeout(() => {
-      if (!el.isConnected) return;
-      let q = null;
-      try {
-        // 相機拍的：只在取景框附近找，而且卡片一定是直的
-        const region = rect ? { x: rect.x - rect.w * 0.25, y: rect.y - rect.h * 0.2, w: rect.w * 1.5, h: rect.h * 1.4 } : null;
-        q = detectCard(orig.canvas, region, { portrait: !!rect });
-      } catch (err) { console.error(err); }
-      if (q) {
-        applyQuad(q);
-        msg.textContent = '✨ 已自動對齊卡片，可以再拖曳、縮放微調';
-      } else {
-        msg.textContent = '沒找到卡片的邊，請手動調整，或按「調整四角」';
-      }
-    }, 60);
 
     // 手勢
     const pts = new Map();
@@ -267,10 +243,10 @@ function cropper(img, rect) {
     $('[data-rot]', el).onclick = () => { st.rot = (st.rot + 90) % 360; const k = st.tx; st.tx = -st.ty; st.ty = k; fit(); draw(); };
     $('[data-fine]', el).oninput = (e) => { st.fine = +e.target.value; draw(); };
     $('[data-reset]', el).onclick = () => layout(true);
-    autoBtn.onclick = () => useAligned(!autoBtn.classList.contains('on'));
+    origBtn.onclick = () => { quad = null; origBtn.hidden = true; setSource(orig.canvas, orig.rect); };
     $('[data-corners]', el).onclick = async () => {
       const q = await cornerEditor(orig.canvas, quad || defaultQuad(orig.canvas, orig.rect));
-      if (q) { applyQuad(q); msg.textContent = '已依照你拉的四個角對齊，可以再微調'; }
+      if (q) applyQuad(q);
     };
     $('[data-ok]', el).onclick = () => {
       // 依照畫面上的變換，把取景框內的範圍畫到 900 × 1257 的畫布
@@ -312,7 +288,7 @@ function cornerEditor(canvas, start) {
       </div>
       <div class="crop-bottom">
         <div class="row-btns">
-          <button class="btn ghost light" data-auto>🔍 重新偵測</button>
+          <button class="btn ghost light" data-reset>重設</button>
           <button class="btn primary" data-ok>套用</button>
         </div>
       </div>
@@ -373,10 +349,7 @@ function cornerEditor(canvas, start) {
       d.addEventListener('pointerup', end);
       d.addEventListener('pointercancel', end);
     });
-    $('[data-auto]', el).onclick = () => {
-      const found = detectCard(canvas);
-      if (found) { found.forEach((p, i) => { q[i] = p; }); render(); toast('已重新偵測'); } else toast('還是找不到卡片的邊，請手動拉');
-    };
+    $('[data-reset]', el).onclick = () => { defaultQuad(canvas).forEach((p, i) => { q[i] = p; }); render(); };
     $('[data-ok]', el).onclick = () => { out = q.map((p) => ({ ...p })); ro.disconnect(); el.close(); };
   });
 }
