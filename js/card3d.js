@@ -9,7 +9,8 @@ export const FINISHES = {
   plain: { label: '一般' },
 };
 
-export function cardHTML(src, finish = 'holo', { big = false } = {}) {
+// front：卡片正面的內容（照片或自製卡面）
+export function cardShell(front, finish = 'holo', { big = false } = {}) {
   const f = FINISHES[finish] ? finish : 'holo';
   const edges = big ? Array.from({ length: 6 }, (_, i) => `<i class="c3-edge" style="--z:${(i - 2.5) * 0.45}px"></i>`).join('') : '';
   return `<div class="card3d f-${f}${big ? ' big' : ''}">
@@ -17,13 +18,15 @@ export function cardHTML(src, finish = 'holo', { big = false } = {}) {
       ${edges}
       <div class="c3-back"><span class="c3-back-ball"></span><span class="c3-back-word">MY COLLECTION</span></div>
       <div class="c3-front">
-        <img src="${esc(src)}" alt="" draggable="false">
+        ${front}
         <div class="c3-holo"></div>
         <div class="c3-glare"></div>
       </div>
     </div>
   </div>`;
 }
+
+export const cardHTML = (src, finish, opts) => cardShell(`<img src="${esc(src)}" alt="" draggable="false">`, finish, opts);
 
 // 讓一張大卡片可以互動；回傳 { flip, gyro, setFinish, destroy }
 export function interactive(holder) {
