@@ -16,7 +16,7 @@ const fmtDate = (ms) => { const d = new Date(ms || Date.now()); return `${d.getF
 
 // info：{ id, zh, typeText, t1, t2 }
 export function madeCardFace({ cat, info, title, note, photo, created }, { editable = false } = {}) {
-  const t = title ?? info.zh;
+  const t = title ?? info.title ?? info.zh;
   return `<div class="mcard mc-${cat}" style="--t1:${info.t1};--t2:${info.t2}">
     <div class="mc-inner">
       <div class="mc-head">
@@ -26,7 +26,7 @@ export function madeCardFace({ cat, info, title, note, photo, created }, { edita
         <span class="mc-badge">${BADGE[cat]}</span>
       </div>
       <div class="mc-photo">${photo ? `<img src="${esc(photo)}" alt="" draggable="false">` : editable ? '' : '<span class="mc-nophoto">沒有照片</span>'}</div>
-      <div class="mc-strip">No.${pad(info.id)} ${esc(info.zh)} · ${esc(info.typeText)}</div>
+      <div class="mc-strip">No.${pad(info.id)} ${esc(info.zh)}${info.formName ? ` · ${esc(info.formName)}` : ''} · ${esc(info.typeText)}</div>
       ${editable
         ? `<textarea class="mc-desc ${descSize(note)}" maxlength="300" placeholder="在這裡寫介紹…（在哪裡買的、什麼時候抓到、心得…）" aria-label="介紹">${esc(note || '')}</textarea>`
         : `<div class="mc-desc ${descSize(note)}">${esc(note || '')}</div>`}
@@ -211,7 +211,7 @@ export function openMadeEditor({ cat, info, item, photoURL }) {
           ctx.drawImage($('.mc-canvas', win), -w / 2, -h / 2);
           blobs = { full: await toBlob(c, 0.9), thumb: (await resized(c, 480, 0.82)).blob };
         }
-        out = { title: titleEl.value.trim() || info.zh, note: descEl.value.trim(), finish, blobs };
+        out = { title: titleEl.value.trim() || info.title || info.zh, note: descEl.value.trim(), finish, blobs };
         el.close();
       }
     });
@@ -259,7 +259,7 @@ export async function renderMadeCard({ cat, info, title, note, created }, photoU
   y += ph + 2 * u;
   // 資訊條
   x.font = font(3 * u, 600); x.fillStyle = '#6c6876'; x.textAlign = 'center';
-  x.fillText(`No.${pad(info.id)} ${info.zh} · ${info.typeText}`, W / 2, y + 2.6 * u);
+  x.fillText(`No.${pad(info.id)} ${info.zh}${info.formName ? ` · ${info.formName}` : ''} · ${info.typeText}`, W / 2, y + 2.6 * u, CW);
   x.textAlign = 'left';
   y += 6 * u + 2 * u;
   // 介紹（自動換行）
