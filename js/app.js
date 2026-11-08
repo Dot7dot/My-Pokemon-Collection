@@ -27,6 +27,7 @@ export const CATS = {
   card: { label: '卡片', icon: '🃏', hint: '用 PTCG 標準尺寸拍下來，變成立體卡片' },
   shiny: { label: '色違', icon: '✨', hint: '色違的截圖或照片，做成收藏卡' },
   art: { label: '畫圖', icon: '🎨', hint: '自己畫的或收到的圖' },
+  other: { label: '其他', icon: '📦', hint: '周邊、貼紙、徽章、文具…拍下來做成收藏卡' },
 };
 const CAT_KEYS = Object.keys(CATS);
 const TYPES = {
@@ -69,13 +70,13 @@ const cardLike = (cat) => cat === 'card' || MADE_CATS.has(cat);
 const madeFront = (it, photo) => madeCardFace({ cat: it.cat, info: cardInfo(it.dex, it.form), title: it.title, note: it.note, photo, created: it.created });
 
 // ───────── 收藏統計 ─────────
-const counts = new Map(); // dex → { figure, card, shiny, art }
+const counts = new Map(); // dex → { figure, card, shiny, art, other }
 async function loadCounts() {
   counts.clear();
   for (const it of await allItems()) bump(it.dex, it.cat, 1);
 }
 function bump(dex, cat, d) {
-  const c = counts.get(dex) || { figure: 0, card: 0, shiny: 0, art: 0 };
+  const c = counts.get(dex) || Object.fromEntries(CAT_KEYS.map((k) => [k, 0]));
   c[cat] = Math.max(0, (c[cat] || 0) + d);
   if (CAT_KEYS.some((k) => c[k])) counts.set(dex, c); else counts.delete(dex);
 }
@@ -100,8 +101,9 @@ function tileBadges(dex) {
   return `<span class="dots">${CAT_KEYS.filter((k) => c[k]).map((k) => `<i class="dot d-${k}" title="${CATS[k].label} ${c[k]}"></i>`).join('')}</span>`;
 }
 function renderGrid() {
-  $('#genNav').innerHTML = GENS.map((g) => `<button class="chip" data-gen="${g.n}">${GEN_ZH[g.n]}<small>${g.region}</small></button>`).join('')
-    + '<button class="chip toggle" id="onlyMine" aria-pressed="false">只看已收藏</button>';
+  $('#genNav').innerHTML = GENS.map((g) => `<button class="chip" data-gen="${g.n}">${GEN_ZH[g.n]}<small>${g.region}</small></button>`).join('');
+  $('#filters').innerHTML = '<span class="filters-label">篩選</span><button class="fchip" data-filter="mine" aria-pressed="false">★ 已收藏</button>'
+    + CAT_KEYS.map((k) => `<button class="fchip c-${k}" data-filter="${k}" aria-pressed="false">${CATS[k].icon} ${CATS[k].label}</button>`).join('');
   $('#grid').innerHTML = GENS.map((g) => {
     let tiles = '';
     for (let id = g.from; id <= g.to; id++) {
@@ -116,6 +118,7 @@ function renderGrid() {
       <div class="tiles">${tiles}</div></section>`;
   }).join('');
   renderProgress();
+  syncFilterChips();
 }
 function refreshTile(dex) {
   const t = $(`.tile[data-id="${dex}"]`);
@@ -130,7 +133,14 @@ function refreshTile(dex) {
 // ───────── 搜尋 ─────────
 const kata = (s) => s.replace(/[ぁ-ゖ]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 0x60));
 const searchIndex = DEX.map(([zh, en, ja, hans], i) => `${zh}|${en.toLowerCase()}|${ja}|${hans}|${(FORMS[i + 1] || []).map((f) => `${f[2]}|${f[3].toLowerCase()}`).join('|')}`);
+// 篩選：「已收藏」＝有任何收藏；選了種類就只看有那些種類收藏的（選多個是「其中一種就算」）
 let onlyMine = false;
+const catFilter = new Set();
+const passFilter = (id) => {
+  if (catFilter.size) { const c = counts.get(id); return !!c && [...catFilter].some((k) => c[k] > 0); }
+  return !onlyMine || counts.has(id);
+};
+const filtering = () => onlyMine || catFilter.size > 0;
 function matches(q) {
   if (!q) return null;
   const num = q.replace(/^#|^no\.?/i, '');
@@ -155,19 +165,33 @@ function applyFilter() {
     let n = 0;
     for (const t of sec.querySelectorAll('.tile')) {
       const id = +t.dataset.id;
-      const ok = (!set || set.has(id)) && (!onlyMine || counts.has(id));
+      const ok = (!set || set.has(id)) && passFilter(id);
       t.hidden = !ok;
       if (ok) n++;
     }
     sec.hidden = n === 0;
     shown += n;
   }
-  document.body.classList.toggle('filtering', !!q || onlyMine);
+  document.body.classList.toggle('filtering', !!q || filtering());
   const nr = $('#noResult');
   nr.hidden = shown > 0;
-  if (!shown) nr.textContent = q ? `找不到「${q}」，試試編號、中文、英文或日文名稱。` : '還沒有任何收藏，點一隻寶可夢開始新增吧！';
+  const picked = [...catFilter].map((k) => CATS[k].label).join('、');
+  if (!shown) {
+    nr.textContent = q && filtering() ? `「${q}」裡沒有符合篩選的寶可夢。`
+      : q ? `找不到「${q}」，試試編號、中文、英文或日文名稱。`
+      : picked ? `還沒有${picked}的收藏。`
+      : '還沒有任何收藏，點一隻寶可夢開始新增吧！';
+  }
   return set;
 }
+
+function syncFilterChips() {
+  $$('#filters [data-filter]').forEach((b) => {
+    const k = b.dataset.filter;
+    b.setAttribute('aria-pressed', k === 'mine' ? onlyMine : catFilter.has(k));
+  });
+}
+function clearFilters() { onlyMine = false; catFilter.clear(); syncFilterChips(); }
 
 // ───────── 寶可夢頁面 ─────────
 let currentDex = 0;
@@ -577,18 +601,21 @@ function bind() {
   });
   $('#qClear').onclick = () => { $('#q').value = ''; applyFilter(); $('#q').focus(); };
   $('#menuBtn').onclick = openMenu;
+  $('#filters').addEventListener('click', (e) => {
+    const f = e.target.closest('[data-filter]');
+    if (!f) return;
+    const k = f.dataset.filter;
+    if (k === 'mine') onlyMine = !onlyMine;
+    else if (catFilter.has(k)) catFilter.delete(k); else catFilter.add(k);
+    syncFilterChips();
+    applyFilter();
+    window.scrollTo({ top: 0 });
+  });
   $('#genNav').addEventListener('click', (e) => {
-    if (e.target.closest('#onlyMine')) {
-      onlyMine = !onlyMine;
-      e.target.closest('#onlyMine').setAttribute('aria-pressed', onlyMine);
-      applyFilter();
-      window.scrollTo({ top: 0 });
-      return;
-    }
     const b = e.target.closest('[data-gen]');
     if (!b) return;
     const sec = $(`#gen${b.dataset.gen}`);
-    if (sec.hidden) { $('#q').value = ''; onlyMine = false; $('#onlyMine').setAttribute('aria-pressed', false); applyFilter(); }
+    if (sec.hidden) { $('#q').value = ''; clearFilters(); applyFilter(); }
     const top = sec.getBoundingClientRect().top + window.scrollY - $('.top').offsetHeight + 1;
     window.scrollTo({ top, behavior: 'smooth' });
   });

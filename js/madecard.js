@@ -4,10 +4,11 @@ import { layer, $, $$, esc, pad, clamp, toast, pickFile } from './ui.js';
 import { loadBitmap, sizeOf, makeCanvas, toBlob, resized } from './image.js';
 import { FINISHES } from './card3d.js';
 
-export const MADE_CATS = new Set(['figure', 'shiny']);
+export const MADE_CATS = new Set(['figure', 'shiny', 'other']);
 export const PHOTO_W = 1200, PHOTO_H = 900; // 照片框 4:3
-const BADGE = { figure: '🧸 模型', shiny: '✨ 色違' };
-export const DEFAULT_FINISH = { figure: 'plain', shiny: 'sparkle' };
+const BADGE = { figure: '🧸 模型', shiny: '✨ 色違', other: '📦 其他' };
+const BADGE_COLOR = { figure: '#c77700', shiny: '#8b3fd1', other: '#c2406f' };
+export const DEFAULT_FINISH = { figure: 'plain', shiny: 'sparkle', other: 'plain' };
 
 // 字數越多字越小，讓介紹盡量放得下
 const titleSize = (t) => { const n = [...(t || '')].length; return n > 12 ? 's3' : n > 8 ? 's2' : 's1'; };
@@ -198,6 +199,9 @@ export function openMadeEditor({ cat, info, item, photoURL }) {
       if (b.hasAttribute('data-native')) fromFile(true);
       if (b.hasAttribute('data-done')) {
         if (!src) { toast('先拍一張照片或上傳照片'); return; }
+        if (b.disabled) return;
+        b.disabled = true;
+        b.textContent = '儲存中…';
         let blobs = null;
         if (photoDirty) {
           const c = makeCanvas(PHOTO_W, PHOTO_H), ctx = c.getContext('2d');
@@ -242,7 +246,7 @@ export async function renderMadeCard({ cat, info, title, note, created }, photoU
   // 名稱＋標籤
   x.font = font(3.6 * u, 700);
   const badge = BADGE[cat], bw = x.measureText(badge).width + 3.6 * u;
-  x.fillStyle = cat === 'shiny' ? '#8b3fd1' : '#c77700';
+  x.fillStyle = BADGE_COLOR[cat] || '#c77700';
   rr(L + CW - bw, y + 2.2 * u, bw, 6.4 * u, 3.2 * u); x.fill();
   x.fillStyle = '#fff'; x.textBaseline = 'middle'; x.fillText(badge, L + CW - bw + 1.8 * u, y + 5.5 * u);
   const ts = { s1: 7, s2: 5.8, s3: 4.8 }[titleSize(title)];
