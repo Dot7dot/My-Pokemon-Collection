@@ -10,13 +10,16 @@ export const FINISHES = {
 };
 
 // front：卡片正面的內容（照片或自製卡面）
-export function cardShell(front, finish = 'holo', { big = false } = {}) {
+// back：'ptcg' 用實體 PTCG 卡背的照片；其他（自製卡）用 MY COLLECTION 卡背
+export function cardShell(front, finish = 'holo', { big = false, back = 'mine' } = {}) {
   const f = FINISHES[finish] ? finish : 'holo';
   const edges = big ? Array.from({ length: 6 }, (_, i) => `<i class="c3-edge" style="--z:${(i - 2.5) * 0.45}px"></i>`).join('') : '';
   return `<div class="card3d f-${f}${big ? ' big' : ''}">
     <div class="c3-rot">
       ${edges}
-      <div class="c3-back"><span class="c3-back-ball"></span><span class="c3-back-word">MY COLLECTION</span></div>
+      ${back === 'ptcg'
+        ? '<div class="c3-back ptcg"></div>'
+        : '<div class="c3-back"><span class="c3-back-ball"></span><span class="c3-back-word">MY COLLECTION</span></div>'}
       <div class="c3-front">
         ${front}
         <div class="c3-holo"></div>
@@ -26,7 +29,8 @@ export function cardShell(front, finish = 'holo', { big = false } = {}) {
   </div>`;
 }
 
-export const cardHTML = (src, finish, opts) => cardShell(`<img src="${esc(src)}" alt="" draggable="false">`, finish, opts);
+// PTCG 卡片：正面是拍下來的卡，背面是 PTCG 卡背
+export const cardHTML = (src, finish, opts) => cardShell(`<img src="${esc(src)}" alt="" draggable="false">`, finish, { ...opts, back: 'ptcg' });
 
 // 陀螺儀權限：整個頁面只問一次，之後每張卡直接沿用。
 // iPhone 規定要在使用者點擊的當下要求，所以打開卡片的那次點擊就要呼叫這個。

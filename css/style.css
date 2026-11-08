@@ -456,6 +456,7 @@ body.filtering .gen-count { display: none; }
 .c3-back-ball { width: 46%; aspect-ratio: 1; border-radius: 50%; border: 3cqw solid #1a1630; background: linear-gradient(#1a1630 0 0) center / 100% 3cqw no-repeat, linear-gradient(180deg, #ef4a3f 50%, #f7f4ee 50%); position: relative; box-shadow: 0 2cqw 6cqw rgba(0, 0, 0, .35); }
 .c3-back-ball::after { content: ''; position: absolute; left: 50%; top: 50%; width: 30%; aspect-ratio: 1; transform: translate(-50%, -50%); border-radius: 50%; background: #f7f4ee; border: 3cqw solid #1a1630; }
 .c3-back-word { color: #ffd84a; font-weight: 800; letter-spacing: .12em; font-size: 7cqw; text-shadow: 0 .6cqw 0 #1a1630; }
+.c3-back.ptcg { background: #2b3a8f url(../img/ptcg-back.jpg) center / cover no-repeat; box-shadow: none; }
 .c3-edge { background: linear-gradient(90deg, #bdbab3, #e8e4dc, #bdbab3); transform: translateZ(var(--z)); }
 
 /* 陰影會往傾斜的反方向移動 */
