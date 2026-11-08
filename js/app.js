@@ -23,11 +23,10 @@ const GENS = [
 ];
 const GEN_ZH = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九'];
 export const CATS = {
-  figure: { label: '模型', icon: '🧸', hint: '拍下公仔、娃娃、扭蛋，做成收藏卡' },
+  figure: { label: '周邊', icon: '🎁', hint: '公仔、娃娃、扭蛋、徽章、貼紙…拍下來做成收藏卡' },
   card: { label: '卡片', icon: '🃏', hint: '用 PTCG 標準尺寸拍下來，變成立體卡片' },
   shiny: { label: '色違', icon: '✨', hint: '色違的截圖或照片，做成收藏卡' },
   art: { label: '畫圖', icon: '🎨', hint: '自己畫的或收到的圖' },
-  other: { label: '其他', icon: '📦', hint: '周邊、貼紙、徽章、文具…拍下來做成收藏卡' },
 };
 const CAT_KEYS = Object.keys(CATS);
 const TYPES = {
@@ -70,10 +69,14 @@ const cardLike = (cat) => cat === 'card' || MADE_CATS.has(cat);
 const madeFront = (it, photo) => madeCardFace({ cat: it.cat, info: cardInfo(it.dex, it.form), title: it.title, note: it.note, photo, created: it.created });
 
 // ───────── 收藏統計 ─────────
-const counts = new Map(); // dex → { figure, card, shiny, art, other }
+const counts = new Map(); // dex → { figure, card, shiny, art }
 async function loadCounts() {
   counts.clear();
-  for (const it of await allItems()) bump(it.dex, it.cat, 1);
+  for (const it of await allItems()) {
+    // 「其他」類別已經拿掉：之前存的「其他」收藏一律併到「周邊」
+    if (it.cat === 'other') { it.cat = 'figure'; await saveItem(it); }
+    bump(it.dex, it.cat, 1);
+  }
 }
 function bump(dex, cat, d) {
   const c = counts.get(dex) || Object.fromEntries(CAT_KEYS.map((k) => [k, 0]));
@@ -233,7 +236,8 @@ async function openDetail(id, { replace = false } = {}) {
       </div>
       ${forms.length ? `<div class="forms" role="radiogroup" aria-label="地區型態">
         <span class="forms-label">🌏 地區型態</span>
-        ${[0, ...forms.map((f) => f[0])].map((f) => `<button class="form-btn" role="radio" data-form="${f}">${esc(look(id, f).label)}</button>`).join('')}
+        ${[0, ...forms.map((f) => f[0])].map((f) => `<button class="form-btn" role="radio" data-form="${f}">${esc(look(id, f).label)}<b class="form-count" data-form-count="${f}" hidden></b></button>`).join('')}
+        <p class="forms-note" hidden></p>
       </div>` : ''}
       <div class="cat-tabs" role="tablist">${CAT_KEYS.map((k) => `<a class="cat-tab c-${k}" href="#sec-${k}" data-jump="${k}">${CATS[k].icon} ${CATS[k].label}<b data-count="${k}">0</b></a>`).join('')}</div>
       <div class="sections">${CAT_KEYS.map((k) => `<section class="cat c-${k}${cardLike(k) ? ' cardlike' : ''}" id="sec-${k}">
@@ -285,8 +289,21 @@ function closeDetail() {
 
 async function renderItems() {
   const dex = currentDex;
-  const items = await itemsFor(dex);
+  const all = await itemsFor(dex);
   if (dex !== currentDex) return;
+  // 每個地區型態的收藏分開放：沒標型態的算「原本的樣子」
+  const formOf = (it) => it.form || 0;
+  $$('[data-form-count]').forEach((b) => {
+    const n = all.filter((it) => formOf(it) === +b.dataset.formCount).length;
+    b.textContent = n;
+    b.hidden = !n;
+  });
+  const fnote = $('.forms-note');
+  if (fnote) {
+    fnote.hidden = !currentForm;
+    fnote.textContent = currentForm ? `下面是「${look(dex, currentForm).formName}」的收藏，新增的收藏也會放在這個型態` : '';
+  }
+  const items = all.filter((it) => formOf(it) === currentForm);
   detailItems = items;
   for (const k of CAT_KEYS) {
     const list = items.filter((it) => it.cat === k);
@@ -307,6 +324,7 @@ async function renderItems() {
 // ───────── 新增收藏 ─────────
 async function addFlow(cat, source) {
   const dex = currentDex;
+  const form = currentForm;
   let data;
   try {
     if (cat === 'card') {
@@ -323,10 +341,10 @@ async function addFlow(cat, source) {
     toast('讀取照片失敗，換一張試試');
     return;
   }
-  editSheet({ dex, cat, data });
+  editSheet({ dex, cat, data, form });
 }
 
-// 模型、色違：直接打開一張可以編輯的卡片
+// 周邊、色違：直接打開一張可以編輯的卡片
 async function madeFlow(cat, item) {
   const dex = item?.dex ?? currentDex;
   const photoURL = item ? await imageURL(item.id, 'full') : null;
@@ -371,7 +389,7 @@ function chooseSource(cat) {
 }
 
 // 新增或編輯：預覽＋介紹文字
-function editSheet({ dex, cat, data, item }) {
+function editSheet({ dex, cat, data, item, form = 0 }) {
   const isNew = !item;
   const previewURL = data ? URL.createObjectURL(data.full) : '';
   let finish = item?.finish || 'holo';
@@ -406,7 +424,7 @@ function editSheet({ dex, cat, data, item }) {
     const note = $('textarea', el).value.trim();
     const now = Date.now();
     const next = isNew
-      ? { id: uid(), dex, cat, note, created: now, updated: now, w: data.w, h: data.h, ...(cat === 'card' ? { finish } : {}) }
+      ? { id: uid(), dex, cat, ...(form ? { form } : {}), note, created: now, updated: now, w: data.w, h: data.h, ...(cat === 'card' ? { finish } : {}) }
       : { ...item, note, updated: now, ...(cat === 'card' ? { finish } : {}) };
     try {
       await saveItem(next, isNew ? { full: data.full, thumb: data.thumb } : null);
@@ -636,7 +654,7 @@ function bind() {
     if (go) { openDetail(+go.dataset.go, { replace: true }); return; }
     if (e.target.closest('[data-shiny]')) { shinyOn = !shinyOn; renderLook(); return; }
     const fb = e.target.closest('[data-form]');
-    if (fb) { currentForm = +fb.dataset.form; renderLook(); return; }
+    if (fb) { currentForm = +fb.dataset.form; renderLook(); renderItems(); return; }
     const jump = e.target.closest('[data-jump]');
     if (jump) { e.preventDefault(); $(`#sec-${jump.dataset.jump}`).scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
     const add = e.target.closest('[data-add]');
