@@ -1,4 +1,5 @@
 import { DEX } from './dex.js';
+import { FORMS } from './forms.js';
 import { $, $$, esc, pad, layer, toast, confirmBox, pickFile, closeTopLayer } from './ui.js';
 import { allItems, itemsFor, saveItem, deleteItem, imageURL, forgetURLs, uid, askPersist } from './db.js';
 import { processPhoto, processCard } from './image.js';
@@ -44,14 +45,28 @@ const mon = (id) => {
   return { id, zh, en, ja, hans, genus, types, gen };
 };
 
-// 自製收藏卡用的資料：名稱、屬性文字、外框顏色
-const cardInfo = (id) => {
+// 地區型態（阿羅拉、伽勒爾、洗翠、帕底亞）。form = PokeAPI 的寶可夢 id，0 = 原本的樣子
+const REGION = { alola: '阿羅拉', galar: '伽勒爾', hisui: '洗翠', paldea: '帕底亞' };
+function look(id, form = 0) {
   const m = mon(id);
-  const t1 = TYPES[m.types[0]]?.[1] || '#888', t2 = TYPES[m.types[1] || m.types[0]]?.[1] || t1;
-  return { id, zh: m.zh, typeText: m.types.map((t) => TYPES[t][0]).join('／'), t1, t2 };
+  const f = form ? FORMS[id]?.find((x) => x[0] === form) : null;
+  const types = f ? f[4] : m.types;
+  const t1 = TYPES[types[0]]?.[1] || '#888', t2 = TYPES[types[1] || types[0]]?.[1] || t1;
+  return {
+    img: f ? f[0] : id, types, t1, t2,
+    formName: f ? f[2] : '',
+    label: f ? f[2].replace('的樣子', '') : '原本的樣子',
+    title: f ? `${REGION[f[1]]}${m.zh}` : m.zh,
+  };
+}
+
+// 自製收藏卡用的資料：名稱、屬性文字、外框顏色
+const cardInfo = (id, form = 0) => {
+  const m = mon(id), l = look(id, form);
+  return { id, zh: m.zh, title: l.title, formName: l.formName, typeText: l.types.map((t) => TYPES[t][0]).join('／'), t1: l.t1, t2: l.t2 };
 };
 const cardLike = (cat) => cat === 'card' || MADE_CATS.has(cat);
-const madeFront = (it, photo) => madeCardFace({ cat: it.cat, info: cardInfo(it.dex), title: it.title, note: it.note, photo, created: it.created });
+const madeFront = (it, photo) => madeCardFace({ cat: it.cat, info: cardInfo(it.dex, it.form), title: it.title, note: it.note, photo, created: it.created });
 
 // ───────── 收藏統計 ─────────
 const counts = new Map(); // dex → { figure, card, shiny, art }
@@ -114,7 +129,7 @@ function refreshTile(dex) {
 
 // ───────── 搜尋 ─────────
 const kata = (s) => s.replace(/[ぁ-ゖ]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 0x60));
-const searchIndex = DEX.map(([zh, en, ja, hans]) => `${zh}|${en.toLowerCase()}|${ja}|${hans}`);
+const searchIndex = DEX.map(([zh, en, ja, hans], i) => `${zh}|${en.toLowerCase()}|${ja}|${hans}|${(FORMS[i + 1] || []).map((f) => `${f[2]}|${f[3].toLowerCase()}`).join('|')}`);
 let onlyMine = false;
 function matches(q) {
   if (!q) return null;
@@ -158,6 +173,7 @@ function applyFilter() {
 let currentDex = 0;
 let gridScroll = 0; // 打開寶可夢頁面前的捲動位置，回來時還原
 let detailItems = [];
+let currentForm = 0, shinyOn = false;
 async function openDetail(id, { replace = false } = {}) {
   id = Math.min(TOTAL, Math.max(1, id | 0));
   const target = `#/p/${id}`;
@@ -165,11 +181,11 @@ async function openDetail(id, { replace = false } = {}) {
     if (replace) history.replaceState(history.state, '', target); else location.hash = target;
   }
   currentDex = id;
+  currentForm = 0;
+  shinyOn = false;
   const m = mon(id);
   const d = $('#detail');
-  const t1 = TYPES[m.types[0]]?.[1] || '#888', t2 = TYPES[m.types[1] || m.types[0]]?.[1] || t1;
-  d.style.setProperty('--t1', t1);
-  d.style.setProperty('--t2', t2);
+  const forms = FORMS[id] || [];
   d.innerHTML = `<div class="d-bar">
       <button class="icon-btn" data-back aria-label="回到圖鑑">←</button>
       <span class="d-title">#${pad(id)} ${esc(m.zh)}</span>
@@ -179,22 +195,27 @@ async function openDetail(id, { replace = false } = {}) {
     <div class="d-scroll">
       <div class="hero">
         <button class="hero-art" data-shiny aria-label="切換色違樣子">
-          <img src="${artwork(id)}" alt="${esc(m.zh)}" onerror="this.src='${sprite(id)}'">
+          <img alt="${esc(m.zh)}">
           <span class="shiny-tip">✨ 點一下看色違</span>
         </button>
         <div class="hero-info">
           <p class="hero-no">No. ${pad(id)} · 第${GEN_ZH[m.gen]}世代</p>
           <h2 class="hero-name">${esc(m.zh)}</h2>
+          <p class="hero-form" hidden></p>
           <p class="hero-alt">${esc(m.en)} · ${esc(m.ja)}</p>
           ${m.genus ? `<p class="hero-genus">${esc(m.genus)}</p>` : ''}
-          <p class="types">${m.types.map((t) => `<span class="type" style="--c:${TYPES[t][1]}">${TYPES[t][0]}</span>`).join('')}</p>
+          <p class="types"></p>
         </div>
       </div>
+      ${forms.length ? `<div class="forms" role="radiogroup" aria-label="地區型態">
+        <span class="forms-label">🌏 地區型態</span>
+        ${[0, ...forms.map((f) => f[0])].map((f) => `<button class="form-btn" role="radio" data-form="${f}">${esc(look(id, f).label)}</button>`).join('')}
+      </div>` : ''}
       <div class="cat-tabs" role="tablist">${CAT_KEYS.map((k) => `<a class="cat-tab c-${k}" href="#sec-${k}" data-jump="${k}">${CATS[k].icon} ${CATS[k].label}<b data-count="${k}">0</b></a>`).join('')}</div>
       <div class="sections">${CAT_KEYS.map((k) => `<section class="cat c-${k}${cardLike(k) ? ' cardlike' : ''}" id="sec-${k}">
         <header class="cat-head">
           <h3>${CATS[k].icon} ${CATS[k].label}</h3>
-          ${k === 'shiny' ? `<img class="shiny-ref" src="${shinySprite(id)}" alt="色違參考圖" loading="lazy">` : ''}
+          ${k === 'shiny' ? '<img class="shiny-ref" alt="色違參考圖" loading="lazy">' : ''}
           <button class="btn small primary" data-add="${k}">＋ 新增</button>
         </header>
         <div class="items" data-items="${k}"></div>
@@ -207,8 +228,27 @@ async function openDetail(id, { replace = false } = {}) {
     requestAnimationFrame(() => d.classList.add('in'));
   }
   $('.d-scroll', d).scrollTop = 0;
+  renderLook();
   await renderItems();
 }
+// 依照目前的地區型態和色違開關，更新插圖、屬性、顏色
+function renderLook() {
+  const d = $('#detail'), l = look(currentDex, currentForm);
+  d.style.setProperty('--t1', l.t1);
+  d.style.setProperty('--t2', l.t2);
+  const art = $('.hero-art', d), img = $('img', art);
+  img.onerror = () => { img.onerror = null; img.src = (shinyOn ? shinySprite : sprite)(l.img); };
+  img.src = artwork(l.img, shinyOn);
+  art.classList.toggle('shiny', shinyOn);
+  $('.shiny-tip', d).textContent = shinyOn ? '✨ 色違' : '✨ 點一下看色違';
+  $('.hero-form', d).textContent = l.formName;
+  $('.hero-form', d).hidden = !l.formName;
+  $('.types', d).innerHTML = l.types.map((t) => `<span class="type" style="--c:${TYPES[t][1]}">${TYPES[t][0]}</span>`).join('');
+  $$('.form-btn', d).forEach((b) => { const on = +b.dataset.form === currentForm; b.classList.toggle('on', on); b.setAttribute('aria-checked', on); });
+  const ref = $('.shiny-ref', d);
+  if (ref) ref.src = shinySprite(l.img);
+}
+
 function closeDetail() {
   const d = $('#detail');
   if (d.hidden) return;
@@ -266,12 +306,14 @@ async function addFlow(cat, source) {
 async function madeFlow(cat, item) {
   const dex = item?.dex ?? currentDex;
   const photoURL = item ? await imageURL(item.id, 'full') : null;
-  const r = await openMadeEditor({ cat, info: cardInfo(dex), item, photoURL });
+  // 新增時用頁面上選的地區型態（屬性、外框顏色、預設名稱都跟著變）
+  const form = item ? (item.form || 0) : currentForm;
+  const r = await openMadeEditor({ cat, info: cardInfo(dex, form), item, photoURL });
   if (!r) return;
   const now = Date.now();
   const next = item
     ? { ...item, title: r.title, note: r.note, finish: r.finish, updated: now }
-    : { id: uid(), dex, cat, title: r.title, note: r.note, finish: r.finish, created: now, updated: now, w: 1200, h: 900 };
+    : { id: uid(), dex, cat, ...(form ? { form } : {}), title: r.title, note: r.note, finish: r.finish, created: now, updated: now, w: 1200, h: 900 };
   if (!item && !r.blobs) return;
   try {
     await saveItem(next, r.blobs);
@@ -440,7 +482,8 @@ function itemMenu(it, viewer) {
       const a = document.createElement('a');
       const photo = await imageURL(it.id, 'full');
       // 自製卡存成整張卡片的圖
-      a.href = MADE_CATS.has(it.cat) ? URL.createObjectURL(await renderMadeCard({ ...it, info: cardInfo(it.dex), title: it.title ?? mon(it.dex).zh }, photo)) : photo;
+      const info = cardInfo(it.dex, it.form);
+      a.href = MADE_CATS.has(it.cat) ? URL.createObjectURL(await renderMadeCard({ ...it, info, title: it.title ?? info.title }, photo)) : photo;
       a.download = `${pad(it.dex)}-${mon(it.dex).zh}-${CATS[it.cat].label}.jpg`;
       a.click();
     }
@@ -569,13 +612,9 @@ function bind() {
     if (e.target.closest('[data-back]')) { history.length > 1 && history.state?.fromGrid ? history.back() : (location.hash = '#/'); return; }
     const go = e.target.closest('[data-go]');
     if (go) { openDetail(+go.dataset.go, { replace: true }); return; }
-    const sh = e.target.closest('[data-shiny]');
-    if (sh) {
-      const on = sh.classList.toggle('shiny');
-      sh.querySelector('img').src = artwork(currentDex, on);
-      sh.querySelector('.shiny-tip').textContent = on ? '✨ 色違' : '✨ 點一下看色違';
-      return;
-    }
+    if (e.target.closest('[data-shiny]')) { shinyOn = !shinyOn; renderLook(); return; }
+    const fb = e.target.closest('[data-form]');
+    if (fb) { currentForm = +fb.dataset.form; renderLook(); return; }
     const jump = e.target.closest('[data-jump]');
     if (jump) { e.preventDefault(); $(`#sec-${jump.dataset.jump}`).scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
     const add = e.target.closest('[data-add]');
