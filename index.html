@@ -15,6 +15,17 @@
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon-180.png">
   <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/marker.css">
+  <script>
+    // 先套用上次選的風格，避免畫面先閃一下預設風格
+    try {
+      var st = localStorage.getItem('mpc.style');
+      if (st && st !== 'default') {
+        document.documentElement.dataset.style = st;
+        if (st === 'marker') document.write('<link id="markerFont" rel="stylesheet" href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@400;700&display=swap">');
+      }
+    } catch (e) { /* 無痕模式等情況就用預設風格 */ }
+  </script>
 </head>
 <body>
   <header class="top">
@@ -26,6 +37,7 @@
           <p class="brand-sub" id="progress">我的寶可夢收藏庫</p>
         </div>
       </div>
+      <button class="icon-btn" id="styleBtn" aria-label="切換風格">🖍️</button>
       <button class="icon-btn" id="menuBtn" aria-label="選單">⋯</button>
     </div>
     <div class="search">
