@@ -1,14 +1,14 @@
-// 自製收藏卡（模型、色違）：最上面是名稱、上半部是照片、下半部是介紹。
+// 自製收藏卡（周邊、色違）：最上面是名稱、上半部是照片、下半部是介紹。
 // 新增時直接出現一張空白卡片，照片框裡就是相機畫面，名稱和介紹直接在卡片上打字。
 import { layer, $, $$, esc, pad, clamp, toast, pickFile } from './ui.js';
 import { loadBitmap, sizeOf, makeCanvas, toBlob, resized } from './image.js';
 import { FINISHES } from './card3d.js';
 
-export const MADE_CATS = new Set(['figure', 'shiny', 'other']);
+export const MADE_CATS = new Set(['figure', 'shiny']);
 export const PHOTO_W = 1200, PHOTO_H = 900; // 照片框 4:3
-const BADGE = { figure: '🧸 模型', shiny: '✨ 色違', other: '📦 其他' };
-const BADGE_COLOR = { figure: '#c77700', shiny: '#8b3fd1', other: '#c2406f' };
-export const DEFAULT_FINISH = { figure: 'plain', shiny: 'sparkle', other: 'plain' };
+const BADGE = { figure: '🎁 周邊', shiny: '✨ 色違' };
+const BADGE_COLOR = { figure: '#c77700', shiny: '#8b3fd1' };
+export const DEFAULT_FINISH = { figure: 'plain', shiny: 'sparkle' };
 
 // 字數越多字越小，讓介紹盡量放得下
 const titleSize = (t) => { const n = [...(t || '')].length; return n > 12 ? 's3' : n > 8 ? 's2' : 's1'; };
