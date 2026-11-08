@@ -1,0 +1,190 @@
+/* ───────── 麥克筆風格 ─────────
+   白底、簡潔；外框用「手繪不規則圓角＋粗黑線」做出麥克筆畫的感覺，
+   重點用螢光筆（黃色斜刷）標示。只在 <html data-style="marker"> 時生效。 */
+
+html:root[data-style="marker"] {
+  --ink: #1f1f22;
+  --ink2: #5d5d66;
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --surface2: #f4f4f1;
+  --line: #1f1f22;
+  --accent: #2160c4;
+  --head-ink: #1f1f22;
+  --head-chip: transparent;
+  --navy: #1f1f22;
+  --yellow: #ffe14d;
+  --yellow2: #ffd21f;
+  --yellow-ink: #1f1f22;
+  --shadow: none;
+  --layer-bg: #ffffff;
+  /* 手繪感的圓角：每個角都不一樣 */
+  --wonky: 255px 18px 225px 16px / 16px 225px 18px 255px;
+  --wonky-s: 14px 6px 12px 7px / 6px 13px 7px 14px;
+  --pen: 2.4px solid #1f1f22;
+  --hl: linear-gradient(100deg, transparent 2%, rgba(255, 225, 77, .9) 4%, rgba(255, 220, 60, .85) 94%, transparent 97%);
+  /* 手繪波浪線（一段 120px，可以無限接下去） */
+  --scribble: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='10' viewBox='0 0 120 10'%3E%3Cpath d='M0 5 C 12 2.5 22 7.5 34 5 S 58 2.8 70 5.2 S 96 7.4 108 4.8 S 116 4.4 120 5' fill='none' stroke='%231f1f22' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E");
+  color-scheme: light;
+}
+html:root[data-style="marker"] body {
+  font-family: "LXGW WenKai TC", "Klee One", system-ui, -apple-system, "PingFang TC", "Noto Sans TC", sans-serif;
+  background: #fff;
+}
+
+/* 頂端：白底，底下一條手繪線 */
+[data-style="marker"] .top {
+  background: #fff var(--scribble) left bottom / 120px 10px repeat-x;
+  border-bottom: 0;
+  padding-bottom: 6px;
+  box-shadow: none;
+}
+[data-style="marker"] .brand h1 { letter-spacing: .02em; }
+[data-style="marker"] .brand-ball { border-color: var(--ink); box-shadow: none; }
+[data-style="marker"] .top .icon-btn {
+  background: #fff;
+  color: var(--ink);
+  border: var(--pen);
+  border-radius: var(--wonky-s);
+}
+[data-style="marker"] .top .icon-btn:active { background: var(--yellow); }
+[data-style="marker"] .search input {
+  border: var(--pen);
+  border-radius: var(--wonky);
+  box-shadow: none;
+  font-family: inherit;
+}
+[data-style="marker"] .chip,
+[data-style="marker"] .fchip,
+[data-style="marker"] .form-btn,
+[data-style="marker"] .finish {
+  background: #fff;
+  color: var(--ink);
+  border: 2px solid var(--ink);
+  border-radius: var(--wonky);
+  box-shadow: none;
+}
+[data-style="marker"] .chip.on,
+[data-style="marker"] .form-btn.on,
+[data-style="marker"] .finish.on { background: var(--hl), #fff; color: var(--ink); }
+[data-style="marker"] .fchip[aria-pressed="true"] { background: var(--cc, var(--ink)); color: #fff; }
+[data-style="marker"] .fchip[data-filter="mine"][aria-pressed="true"] { background: var(--hl), #fff; color: var(--ink); }
+[data-style="marker"] .form-count { background: var(--ink); color: #fff; }
+
+/* 世代標題：螢光筆畫過 */
+[data-style="marker"] .gen-head {
+  background: rgba(255, 255, 255, .94);
+  border-bottom: 0;
+}
+[data-style="marker"] .gen-num { background: var(--hl); padding: 0 6px; }
+[data-style="marker"] .gen-region { color: var(--accent); }
+[data-style="marker"] .gen-count { background: #fff; border: 2px solid var(--ink); border-radius: var(--wonky); color: var(--ink); }
+
+/* 格子：粗黑手繪框，每格角度一點點不同 */
+[data-style="marker"] .tile {
+  border: var(--pen);
+  border-radius: var(--wonky-s);
+  box-shadow: none;
+}
+[data-style="marker"] .tile:nth-child(3n) { border-radius: 7px 15px 6px 13px / 13px 6px 15px 7px; }
+[data-style="marker"] .tile:nth-child(3n + 1) { border-radius: 12px 8px 15px 6px / 8px 14px 6px 12px; }
+[data-style="marker"] .tile.has {
+  background: var(--hl) 0 72% / 100% 46% no-repeat, #fff;
+  border-width: 3px;
+  box-shadow: none;
+}
+[data-style="marker"] .tile.has::before { color: var(--ink); }
+[data-style="marker"] .dot { box-shadow: 0 0 0 1.5px var(--ink); }
+
+/* 寶可夢頁面 */
+[data-style="marker"] .detail { background: #fff; }
+[data-style="marker"] .d-bar {
+  background: #fff var(--scribble) left bottom / 120px 10px repeat-x;
+  color: var(--ink);
+  padding-bottom: 10px;
+}
+[data-style="marker"] .d-title { text-shadow: none; }
+[data-style="marker"] .d-bar .icon-btn { background: #fff; border: var(--pen); border-radius: var(--wonky-s); }
+[data-style="marker"] .hero { background: #fff; color: var(--ink); }
+[data-style="marker"] .hero-info { text-shadow: none; }
+[data-style="marker"] .hero-art {
+  background: radial-gradient(circle, color-mix(in srgb, var(--t1) 28%, #fff) 0 58%, transparent 59%);
+  border: 0;
+}
+[data-style="marker"] .hero-art::before {
+  content: '';
+  position: absolute;
+  inset: 4%;
+  border: 3px solid var(--ink);
+  border-radius: 52% 48% 46% 54% / 50% 54% 46% 50%;
+  pointer-events: none;
+}
+[data-style="marker"] .hero-art img { filter: none; position: relative; }
+[data-style="marker"] .shiny-tip { background: #fff; color: var(--ink); border: 2px solid var(--ink); border-radius: var(--wonky); }
+[data-style="marker"] .hero-name { background: var(--hl) 0 85% / 100% 40% no-repeat; display: inline; }
+[data-style="marker"] .hero-form { border: 2px solid var(--ink); border-radius: var(--wonky); }
+[data-style="marker"] .type {
+  background: #fff;
+  color: var(--c);
+  border: 2.4px solid var(--c);
+  border-radius: var(--wonky);
+  text-shadow: none;
+  box-shadow: none;
+}
+[data-style="marker"] .cat-tabs { background: rgba(255, 255, 255, .95); }
+[data-style="marker"] .cat-tab { border: var(--pen); border-radius: var(--wonky-s); box-shadow: none; }
+[data-style="marker"] .cat-head { border-bottom: 0; background: var(--scribble) left bottom / 120px 10px repeat-x; padding-bottom: 12px; }
+[data-style="marker"] .cat-head h3 { text-decoration: underline 4px var(--cc); text-underline-offset: 5px; }
+[data-style="marker"] .photo-item img { border: var(--pen); border-radius: var(--wonky-s); box-shadow: none; }
+[data-style="marker"] .add-tile { border: 2.4px dashed var(--ink); border-radius: var(--wonky-s); color: var(--ink); }
+[data-style="marker"] .add-tile span { color: var(--cc); }
+
+/* 按鈕 */
+[data-style="marker"] .btn {
+  background: #fff;
+  color: var(--ink);
+  border: var(--pen);
+  border-radius: var(--wonky);
+  box-shadow: none;
+  font-family: inherit;
+}
+[data-style="marker"] .btn.primary,
+[data-style="marker"] .cat .btn.primary { background: var(--hl), #fff; color: var(--ink); box-shadow: none; }
+[data-style="marker"] .btn.danger { background: #fff; color: #d0302a; border-color: #d0302a; }
+[data-style="marker"] .btn.ghost { box-shadow: none; }
+
+/* 抽屜、提示 */
+[data-style="marker"] .sheet { border: var(--pen); border-bottom: 0; border-radius: 26px 14px 0 0 / 18px 26px 0 0; box-shadow: 0 -4px 0 rgba(0, 0, 0, .04); }
+@media (min-width: 640px) { [data-style="marker"] .sheet { border-bottom: var(--pen); border-radius: var(--wonky-s); } }
+[data-style="marker"] .source { background: #fff; border: var(--pen); border-radius: var(--wonky-s); }
+[data-style="marker"] .menu-row { border-radius: var(--wonky-s); }
+[data-style="marker"] .menu-row:active { background: var(--hl), #fff; }
+[data-style="marker"] .field textarea { background: #fff; border: var(--pen); border-radius: var(--wonky-s); font-family: inherit; }
+[data-style="marker"] .toast { background: #fff; color: var(--ink); border: var(--pen); border-radius: var(--wonky); box-shadow: 0 4px 0 rgba(0, 0, 0, .08); }
+
+/* 看大圖、編輯卡片：白紙 */
+[data-style="marker"] .dark-layer { color: var(--ink); }
+[data-style="marker"] .dark-layer .btn.dark { background: #fff; color: var(--ink); border: var(--pen); backdrop-filter: none; -webkit-backdrop-filter: none; }
+[data-style="marker"] .dark-layer .btn.dark.on { background: var(--hl), #fff; }
+[data-style="marker"] .dark-layer .chip-btn,
+[data-style="marker"] .finish-row.dark .finish { background: #fff; color: var(--ink); border: 2px solid var(--ink); border-radius: var(--wonky); }
+[data-style="marker"] .dark-layer .chip-btn.on,
+[data-style="marker"] .finish-row.dark .finish.on { background: var(--hl), #fff; color: var(--ink); }
+[data-style="marker"] .v-nav { color: var(--ink); background: #fff; border: var(--pen); border-radius: var(--wonky-s); }
+[data-style="marker"] .v-img { border: var(--pen); border-radius: var(--wonky-s); box-shadow: none; }
+[data-style="marker"] .mce-card .mcard { box-shadow: 0 10px 24px rgba(0, 0, 0, .18); }
+[data-style="marker"] .card3d.big::before { background: rgba(0, 0, 0, .28); }
+
+/* 風格選擇 */
+.style-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.style-opt { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 16px; background: var(--surface2); text-align: left; font-weight: 700; }
+.style-opt small { font-weight: 400; color: var(--ink2); font-size: .78rem; }
+.style-opt[aria-checked="true"] { box-shadow: inset 0 0 0 3px var(--accent); }
+.style-prev { height: 76px; border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; }
+.style-prev.p-default { background: #f1f8fd; }
+.style-prev.p-default i { display: block; height: 26px; background: linear-gradient(180deg, #a9def7, #74c3ee); border-bottom: 3px solid #ffd84a; }
+.style-prev.p-default b { margin: 8px; height: 28px; width: 44%; border-radius: 8px; background: #fff; box-shadow: inset 0 0 0 2px #ffd84a; }
+.style-prev.p-marker { background: #fff; border: 2.4px solid #1f1f22; border-radius: 14px 6px 12px 7px / 6px 13px 7px 14px; }
+.style-prev.p-marker i { display: block; height: 26px; background: var(--scribble, none) left bottom / 60px 6px repeat-x; border-bottom: 2.4px solid #1f1f22; border-radius: 0 0 40px 6px / 0 0 4px 3px; }
+.style-prev.p-marker b { margin: 8px; height: 28px; width: 44%; border: 2.4px solid #1f1f22; border-radius: 12px 5px 10px 6px / 5px 11px 6px 12px; background: linear-gradient(100deg, transparent 4%, rgba(255, 225, 77, .9) 6%, rgba(255, 220, 60, .85) 92%, transparent 96%); }
+[data-style="marker"] .style-opt { background: #fff; border: 2px solid var(--ink); border-radius: var(--wonky-s); }

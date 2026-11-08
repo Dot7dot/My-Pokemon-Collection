@@ -536,6 +536,46 @@ function itemMenu(it, viewer) {
   });
 }
 
+// ───────── 風格 ─────────
+const STYLES = {
+  default: { label: '淡藍 × 黃', hint: '預設的淡藍色和黃色', theme: null },
+  marker: { label: '麥克筆', hint: '白底、簡潔，線條像麥克筆畫的', theme: '#ffffff' },
+};
+const FONT_URL = 'https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@400;700&display=swap';
+const themeMetas = [...document.querySelectorAll('meta[name="theme-color"]')].map((m) => [m, m.content]);
+function applyStyle(name) {
+  if (!STYLES[name]) name = 'default';
+  if (name === 'default') delete document.documentElement.dataset.style;
+  else document.documentElement.dataset.style = name;
+  // 麥克筆風格用手寫感的字型（只在用到時才下載）
+  if (name === 'marker' && !document.getElementById('markerFont')) {
+    const l = document.createElement('link');
+    l.id = 'markerFont'; l.rel = 'stylesheet'; l.href = FONT_URL;
+    document.head.append(l);
+  }
+  themeMetas.forEach(([m, orig]) => { m.content = STYLES[name].theme || orig; });
+  try { localStorage.setItem('mpc.style', name); } catch { /* 存不了就只套用這一次 */ }
+}
+function openStyle() {
+  const cur = document.documentElement.dataset.style || 'default';
+  const el = layer(`<div class="sheet" role="dialog" aria-modal="true">
+    <h3 class="sheet-title">🖍️ 風格</h3>
+    <p class="sheet-hint">換整個收藏庫的樣子（只記在這台裝置）</p>
+    <div class="style-opts" role="radiogroup" aria-label="風格">
+      ${Object.entries(STYLES).map(([k, s]) => `<button class="style-opt" role="radio" aria-checked="${k === cur}" data-style-pick="${k}">
+        <span class="style-prev p-${k}"><i></i><b></b></span>${s.label}<small>${s.hint}</small></button>`).join('')}
+    </div>
+    <button class="btn ghost wide" data-close>完成</button>
+  </div>`, { cls: 'sheet-layer' });
+  el.addEventListener('click', (e) => {
+    if (e.target === el) { el.close(); return; }
+    const b = e.target.closest('[data-style-pick]');
+    if (!b) return;
+    applyStyle(b.dataset.stylePick);
+    $$('[data-style-pick]', el).forEach((x) => x.setAttribute('aria-checked', x === b));
+  });
+}
+
 // ───────── 選單：備份／匯入 ─────────
 async function openMenu() {
   let usage = '';
@@ -619,6 +659,7 @@ function bind() {
   });
   $('#qClear').onclick = () => { $('#q').value = ''; applyFilter(); $('#q').focus(); };
   $('#menuBtn').onclick = openMenu;
+  $('#styleBtn').onclick = openStyle;
   $('#filters').addEventListener('click', (e) => {
     const f = e.target.closest('[data-filter]');
     if (!f) return;
@@ -691,6 +732,7 @@ function bind() {
 
 async function init() {
   if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+  applyStyle(document.documentElement.dataset.style || 'default');
   try { await loadCounts(); } catch (err) { console.error(err); toast('無法開啟收藏資料庫（無痕模式可能不支援）'); }
   renderGrid();
   bind();
