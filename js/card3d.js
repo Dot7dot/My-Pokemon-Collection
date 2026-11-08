@@ -28,15 +28,31 @@ export function cardShell(front, finish = 'holo', { big = false } = {}) {
 
 export const cardHTML = (src, finish, opts) => cardShell(`<img src="${esc(src)}" alt="" draggable="false">`, finish, opts);
 
-// 讓一張大卡片可以互動；回傳 { flip, gyro, setFinish, destroy }
-export function interactive(holder) {
+// 陀螺儀權限：整個頁面只問一次，之後每張卡直接沿用。
+// iPhone 規定要在使用者點擊的當下要求，所以打開卡片的那次點擊就要呼叫這個。
+let motionPerm = null;
+export function ensureMotion() {
+  const D = window.DeviceOrientationEvent;
+  if (!D || !window.isSecureContext) return Promise.resolve(false);
+  if (typeof D.requestPermission !== 'function') return Promise.resolve(true); // Android 等不需要權限
+  if (!motionPerm) {
+    motionPerm = D.requestPermission()
+      .then((r) => r === 'granted')
+      .catch(() => { motionPerm = null; return false; }); // 不是在點擊當下呼叫：下次再試
+  }
+  return motionPerm;
+}
+
+// 讓一張大卡片可以互動；motion: true 時直接用陀螺儀（晃手機看反光）
+// 回傳 { flip, setFinish, destroy }
+export function interactive(holder, { motion = false } = {}) {
   const card = holder.querySelector('.card3d');
   const rot = holder.querySelector('.c3-rot');
   // 目前值與目標值（-1 ~ 1），用彈簧慢慢追上，手感比較柔
   const cur = { x: 0, y: 0, v: 0, w: 0 };
   const tgt = { x: 0, y: 0 };
   let flipped = false, flipAngle = 0, flipCur = 0;
-  let dragging = false, gyroOn = false, gyroBase = null, lastInput = 0, raf = 0, alive = true;
+  let dragging = false, gyroBase = null, gyroAt = -1e9, lastInput = 0, raf = 0, alive = true;
 
   const setFromPoint = (e) => {
     const r = card.getBoundingClientRect();
@@ -63,7 +79,7 @@ export function interactive(holder) {
       if (now - (release.lastTap || 0) < 320) { api.flip(); release.lastTap = 0; } else release.lastTap = now;
     }
     dragging = false;
-    if (!gyroOn) { tgt.x = 0; tgt.y = 0; }
+    if (performance.now() - gyroAt > 500) { tgt.x = 0; tgt.y = 0; } // 有陀螺儀時放手就交回給手機角度
     card.classList.remove('active');
   };
   holder.addEventListener('pointerup', release);
@@ -71,18 +87,26 @@ export function interactive(holder) {
   holder.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') release(e); });
 
   const onOrient = (e) => {
-    if (e.beta == null || dragging) return;
-    if (!gyroBase) gyroBase = { b: e.beta, g: e.gamma };
-    tgt.x = clamp((e.gamma - gyroBase.g) / 22, -1.2, 1.2);
-    tgt.y = clamp((e.beta - gyroBase.b) / 22, -1.2, 1.2);
-    lastInput = performance.now();
-    card.classList.add('active');
+    if (e.beta == null || e.gamma == null) return;
+    // 橫拿手機時左右、前後的軸會對調
+    const ang = screen.orientation?.angle ?? window.orientation ?? 0;
+    let gx = e.gamma, gy = e.beta;
+    if (ang === 90) { gx = e.beta; gy = -e.gamma; } else if (ang === -90 || ang === 270) { gx = -e.beta; gy = e.gamma; }
+    // 以打開卡片時的拿法為正中間，之後慢慢跟上新的拿法（換姿勢後卡片會自己回正）
+    if (!gyroBase) gyroBase = { x: gx, y: gy };
+    gyroBase.x += (gx - gyroBase.x) * 0.004;
+    gyroBase.y += (gy - gyroBase.y) * 0.004;
+    gyroAt = lastInput = performance.now();
+    if (dragging) return;
+    tgt.x = clamp((gx - gyroBase.x) / 20, -1.2, 1.2);
+    tgt.y = clamp((gy - gyroBase.y) / 20, -1.2, 1.2);
   };
+  if (motion) ensureMotion().then((ok) => { if (ok && alive) window.addEventListener('deviceorientation', onOrient); });
 
   const tick = (t) => {
     if (!alive) return;
     // 沒在操作時輕輕晃，看起來是立體的
-    const idle = !dragging && !gyroOn && t - lastInput > 1200;
+    const idle = !dragging && t - lastInput > 1200; // 陀螺儀一直有資料進來時不會進入閒置
     const gx = idle ? Math.sin(t / 1400) * 0.32 : tgt.x;
     const gy = idle ? Math.cos(t / 1900) * 0.22 : tgt.y;
     // 彈簧
@@ -103,24 +127,6 @@ export function interactive(holder) {
 
   const api = {
     flip() { flipped = !flipped; flipAngle += 180; card.classList.toggle('flipped', flipped); },
-    async gyro() {
-      if (gyroOn) {
-        gyroOn = false;
-        window.removeEventListener('deviceorientation', onOrient);
-        tgt.x = 0; tgt.y = 0;
-        card.classList.remove('active');
-        return false;
-      }
-      const D = window.DeviceOrientationEvent;
-      if (!D) return null;
-      if (typeof D.requestPermission === 'function') {
-        try { if ((await D.requestPermission()) !== 'granted') return null; } catch { return null; }
-      }
-      gyroOn = true;
-      gyroBase = null;
-      window.addEventListener('deviceorientation', onOrient);
-      return true;
-    },
     setFinish(f) {
       for (const k of Object.keys(FINISHES)) card.classList.toggle('f-' + k, k === f);
     },
